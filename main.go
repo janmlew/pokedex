@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/janmlew/pokedex/internal/pokecache"
@@ -198,8 +199,16 @@ func commandCatch(cfg *config, args []string) error {
 }
 
 func commandPokedex(cfg *config, args []string) error {
-	fmt.Println("Your Pokedex:")
+	// Map iteration order is randomized, so collect the names and sort them
+	// for stable, alphabetical output.
+	names := make([]string, 0, len(cfg.pokedex))
 	for name := range cfg.pokedex {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	fmt.Println("Your Pokedex:")
+	for _, name := range names {
 		fmt.Printf(" - %s\n", name)
 	}
 	return nil
