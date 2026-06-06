@@ -24,6 +24,44 @@ type locationAreasResp struct {
 	} `json:"results"`
 }
 
+// Pokemon mirrors the parts of the PokeAPI /pokemon/{name} response we care
+// about. BaseExperience drives the catch difficulty; the height/weight/stats/
+// types fields are modeled now so the later `inspect` command can reuse them.
+type Pokemon struct {
+	Name           string `json:"name"`
+	BaseExperience int    `json:"base_experience"`
+	Height         int    `json:"height"`
+	Weight         int    `json:"weight"`
+	Stats          []struct {
+		BaseStat int `json:"base_stat"`
+		Stat     struct {
+			Name string `json:"name"`
+		} `json:"stat"`
+	} `json:"stats"`
+	Types []struct {
+		Type struct {
+			Name string `json:"name"`
+		} `json:"type"`
+	} `json:"types"`
+}
+
+// fetchPokemon returns the details for a single named Pokemon. Results are
+// cached by URL, so re-fetching the same Pokemon avoids a network round trip.
+func fetchPokemon(name string, cache *pokecache.Cache) (Pokemon, error) {
+	url := "https://pokeapi.co/api/v2/pokemon/" + name
+
+	body, err := getCachedBody(url, cache)
+	if err != nil {
+		return Pokemon{}, err
+	}
+
+	var data Pokemon
+	if err := json.Unmarshal(body, &data); err != nil {
+		return Pokemon{}, fmt.Errorf("decoding pokemon %q: %w", name, err)
+	}
+	return data, nil
+}
+
 // locationAreaResp mirrors the JSON returned by the PokeAPI
 // /location-area/{name} endpoint. We only model the fields we use: the area
 // name and the list of Pokemon that can be encountered there.
@@ -82,7 +120,7 @@ func getCachedBody(url string, cache *pokecache.Cache) ([]byte, error) {
 
 	res, err := http.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("requesting location areas: %w", err)
+		return nil, fmt.Errorf("requesting %s: %w", url, err)
 	}
 	defer res.Body.Close()
 
@@ -92,7 +130,7 @@ func getCachedBody(url string, cache *pokecache.Cache) ([]byte, error) {
 	}
 
 	if res.StatusCode > 299 {
-		return nil, fmt.Errorf("location-area request failed with status %d: %s", res.StatusCode, body)
+		return nil, fmt.Errorf("request to %s failed with status %d: %s", url, res.StatusCode, body)
 	}
 
 	cache.Add(url, body)

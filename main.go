@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
 
@@ -17,6 +18,9 @@ type config struct {
 	nextLocationsURL *string
 	prevLocationsURL *string
 	cache            *pokecache.Cache
+	// pokedex holds every Pokemon the user has successfully caught, keyed by
+	// name.
+	pokedex map[string]Pokemon
 }
 
 type cliCommand struct {
@@ -50,6 +54,11 @@ func getCommands() map[string]cliCommand {
 			description: "Lists the Pokemon found in a location area: explore <area_name>",
 			callback:    commandExplore,
 		},
+		"catch": {
+			name:        "catch",
+			description: "Attempts to catch a Pokemon and add it to your Pokedex: catch <pokemon_name>",
+			callback:    commandCatch,
+		},
 		"exit": {
 			name:        "exit",
 			description: "Exit the Pokedex",
@@ -62,7 +71,8 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	commands := getCommands()
 	cfg := &config{
-		cache: pokecache.NewCache(5 * time.Second),
+		cache:   pokecache.NewCache(5 * time.Second),
+		pokedex: make(map[string]Pokemon),
 	}
 	for {
 		fmt.Print("Pokedex > ")
@@ -153,6 +163,39 @@ func commandExplore(cfg *config, args []string) error {
 		fmt.Printf(" - %s\n", encounter.Pokemon.Name)
 	}
 	return nil
+}
+
+func commandCatch(cfg *config, args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("catch requires exactly one argument: the pokemon name")
+	}
+	name := args[0]
+
+	fmt.Printf("Throwing a Pokeball at %s...\n", name)
+	pokemon, err := fetchPokemon(name, cfg.cache)
+	if err != nil {
+		return err
+	}
+
+	if catchPokemon(pokemon.BaseExperience) {
+		cfg.pokedex[pokemon.Name] = pokemon
+		fmt.Printf("%s was caught!\n", pokemon.Name)
+	} else {
+		fmt.Printf("%s escaped!\n", pokemon.Name)
+	}
+	return nil
+}
+
+// catchPokemon returns true if a catch attempt succeeds. The chance of success
+// falls as base experience rises: we roll a random number in [0, baseExp) and
+// catch only if it lands under catchThreshold. So P(catch) ≈ threshold/baseExp,
+// capped at 1 for low-experience Pokemon (which are always catchable).
+func catchPokemon(baseExperience int) bool {
+	const catchThreshold = 50
+	if baseExperience <= catchThreshold {
+		return true
+	}
+	return rand.Intn(baseExperience) < catchThreshold
 }
 
 func commandMapb(cfg *config, args []string) error {
