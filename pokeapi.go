@@ -24,6 +24,36 @@ type locationAreasResp struct {
 	} `json:"results"`
 }
 
+// locationAreaResp mirrors the JSON returned by the PokeAPI
+// /location-area/{name} endpoint. We only model the fields we use: the area
+// name and the list of Pokemon that can be encountered there.
+type locationAreaResp struct {
+	Name              string `json:"name"`
+	PokemonEncounters []struct {
+		Pokemon struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"pokemon"`
+	} `json:"pokemon_encounters"`
+}
+
+// fetchLocationArea returns the details for a single named location area,
+// including which Pokemon can be encountered there. Results are cached by URL.
+func fetchLocationArea(name string, cache *pokecache.Cache) (locationAreaResp, error) {
+	url := "https://pokeapi.co/api/v2/location-area/" + name
+
+	body, err := getCachedBody(url, cache)
+	if err != nil {
+		return locationAreaResp{}, err
+	}
+
+	var data locationAreaResp
+	if err := json.Unmarshal(body, &data); err != nil {
+		return locationAreaResp{}, fmt.Errorf("decoding location area %q: %w", name, err)
+	}
+	return data, nil
+}
+
 // fetchLocationAreas returns the location-area page at url, decoded into a
 // locationAreasResp. The raw response body is cached under url, so a repeated
 // request for the same page is served from the cache instead of the network.
