@@ -59,6 +59,11 @@ func getCommands() map[string]cliCommand {
 			description: "Attempts to catch a Pokemon and add it to your Pokedex: catch <pokemon_name>",
 			callback:    commandCatch,
 		},
+		"inspect": {
+			name:        "inspect",
+			description: "Shows details about a Pokemon you've caught: inspect <pokemon_name>",
+			callback:    commandInspect,
+		},
 		"exit": {
 			name:        "exit",
 			description: "Exit the Pokedex",
@@ -182,6 +187,33 @@ func commandCatch(cfg *config, args []string) error {
 		fmt.Printf("%s was caught!\n", pokemon.Name)
 	} else {
 		fmt.Printf("%s escaped!\n", pokemon.Name)
+	}
+	return nil
+}
+
+func commandInspect(cfg *config, args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("inspect requires exactly one argument: the pokemon name")
+	}
+	name := args[0]
+
+	// No API call: inspect only works on Pokemon already stored by catch.
+	pokemon, ok := cfg.pokedex[name]
+	if !ok {
+		fmt.Println("you have not caught that pokemon")
+		return nil
+	}
+
+	fmt.Printf("Name: %s\n", pokemon.Name)
+	fmt.Printf("Height: %d\n", pokemon.Height)
+	fmt.Printf("Weight: %d\n", pokemon.Weight)
+	fmt.Println("Stats:")
+	for _, stat := range pokemon.Stats {
+		fmt.Printf("  - %s: %d\n", stat.Stat.Name, stat.BaseStat)
+	}
+	fmt.Println("Types:")
+	for _, t := range pokemon.Types {
+		fmt.Printf("  - %s\n", t.Type.Name)
 	}
 	return nil
 }
