@@ -1,0 +1,70 @@
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+
+	"github.com/janmlew/pokedex/internal/pokecache"
+)
+
+// locationAreasResp mirrors the JSON returned by the PokeAPI
+// /location-area endpoint. Next and Previous are pointers because the API
+// sends JSON null for them at the ends of the list, and a *string lets us
+// represent "no more pages" as nil rather than an empty string.
+type locationAreasResp struct {
+	Count    int     `json:"count"`
+	Next     *string `json:"next"`
+	Previous *string `json:"previous"`
+	Results  []struct {
+		Name string `json:"name"`
+		URL  string `json:"url"`
+	} `json:"results"`
+}
+
+// fetchLocationAreas returns the location-area page at url, decoded into a
+// locationAreasResp. The raw response body is cached under url, so a repeated
+// request for the same page is served from the cache instead of the network.
+func fetchLocationAreas(url string, cache *pokecache.Cache) (locationAreasResp, error) {
+	body, err := getCachedBody(url, cache)
+	if err != nil {
+		return locationAreasResp{}, err
+	}
+
+	var data locationAreasResp
+	if err := json.Unmarshal(body, &data); err != nil {
+		return locationAreasResp{}, fmt.Errorf("decoding location areas: %w", err)
+	}
+	return data, nil
+}
+
+// getCachedBody returns the raw response body for url. On a cache hit it
+// returns the stored bytes without touching the network; on a miss it performs
+// the GET, stores the body in the cache, and returns it.
+func getCachedBody(url string, cache *pokecache.Cache) ([]byte, error) {
+	if body, ok := cache.Get(url); ok {
+		log.Printf("cache hit: %s", url)
+		return body, nil
+	}
+	log.Printf("cache miss: %s", url)
+
+	res, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("requesting location areas: %w", err)
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %w", err)
+	}
+
+	if res.StatusCode > 299 {
+		return nil, fmt.Errorf("location-area request failed with status %d: %s", res.StatusCode, body)
+	}
+
+	cache.Add(url, body)
+	return body, nil
+}

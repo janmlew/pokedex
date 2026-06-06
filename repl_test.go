@@ -2,6 +2,34 @@ package main
 
 import "testing"
 
+func TestGetCommands(t *testing.T) {
+	commands := getCommands()
+
+	// Every command we rely on must be registered.
+	required := []string{"help", "exit"}
+	for _, name := range required {
+		if _, ok := commands[name]; !ok {
+			t.Errorf("getCommands(): expected a %q command to be registered", name)
+		}
+	}
+
+	// Guard against the map-key / name mismatch footgun: the key used for
+	// lookup must equal the command's own name field, and every command must
+	// have a description and a non-nil callback.
+	for key, command := range commands {
+		if command.name != key {
+			t.Errorf("command %q: name field is %q, want it to match the map key",
+				key, command.name)
+		}
+		if command.description == "" {
+			t.Errorf("command %q: description is empty", key)
+		}
+		if command.callback == nil {
+			t.Errorf("command %q: callback is nil", key)
+		}
+	}
+}
+
 func TestCleanInput(t *testing.T) {
 	cases := []struct {
 		input    string
